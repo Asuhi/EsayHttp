@@ -10,16 +10,18 @@
 #include <thread>
 #include <condition_variable>
 #include <atomic>
+#include "Loggor.h"
 
 int main() {
-	HttpServer server;
-	Epoll ep;
+    HttpServer server;
+    Epoll ep;
 	ep.initEpoll(server.initServer());
-	while (1) {
+    LOG_DEBUG << "init over";
+    std::cout<<"ok,"<<std::endl;
+    while (1) {
 		ep.EpollLoop();
 	}
 	return 0;
-
 }
 
 

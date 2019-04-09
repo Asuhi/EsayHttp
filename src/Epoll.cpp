@@ -1,6 +1,6 @@
-#include "Epoll.h"
+ï»¿#include "Epoll.h"
 #include <iostream>
-
+#include "Loggor.h"
 
 void Epoll::initEpoll(int lfd) {
 	_lfd = lfd;
@@ -8,54 +8,39 @@ void Epoll::initEpoll(int lfd) {
 	_efd = epoll_create1(EPOLL_CLOEXEC);
 	struct epoll_event event;
 	event.data.fd = lfd;
-	event.events = EPOLLIN;
-	epoll_ctl(_efd, EPOLL_CTL_ADD, lfd, &event);//½«listenfd¹Òµ½Ê÷ÉÏ
-	memset(events, 0, sizeof(events));
+	event.events = EPOLLIN | EPOLLET;
+	epoll_ctl(_efd, EPOLL_CTL_ADD, lfd, &event);//å°†listenfdæŒ‚åˆ°æ ‘ä¸Š
 }
 
 void Epoll::EpollLoop(){
 
 	int nready = epoll_wait(_efd, events, 128, -1);
 	if (nready == -1) {
-		if (errno == EINTR)
-			return;
-		else {
 			perror("epoll_wait");
 			exit(EXIT_FAILURE);
-		}
+
 	}
 	if (nready == 0)
 		return;
 	for (int i = 0; i < nready; i++) {
-		//Èç¹ûÊÇlistenfdµÄ»°½«Á´½ÓÇëÇó¼ÓÈëµ½ÈÎÎñ¶ÓÁÐ
-		if (events[i].data.fd == _lfd) {//µÚÒ»¸öÊÇlistenfd
-			//Task_t task(clientConnect, (void*)this);//ÓÐ¿Í»§¶ËÁ´½Ó
-			struct sockaddr_in peeraddr;
-			socklen_t peerlen = sizeof(peeraddr);
-			int conn = accept(_lfd, (struct sockaddr*) & peeraddr, &peerlen);
-			struct epoll_event ev;
-			ev.data.fd = conn;
-			ev.events = EPOLLIN | EPOLLET;
-			epoll_ctl(_lfd, EPOLL_CTL_ADD, conn, &ev);//½«ÐÂÁ´½ÓµÄfd¹Òµ½Ê÷ÉÏ
-			std::cout << "client connected\n";
-			memset(events, 0, sizeof(events));
-			/*
+		//å¦‚æžœæ˜¯listenfdçš„è¯å°†é“¾æŽ¥è¯·æ±‚åŠ å…¥åˆ°ä»»åŠ¡é˜Ÿåˆ—
+		if (events[i].data.fd == _lfd) {//ç¬¬ä¸€ä¸ªæ˜¯listenfd
+            
+            Task_t task(clientConnect, (void*)this);//æœ‰å®¢æˆ·ç«¯é“¾æŽ¥
 			ThreadPool* tp = ThreadPool::getInstance();
 			tp->addTask(task);//
-			memset(events, 0, sizeof(events));
-			*/
 		}
-		else if (events[i].events & EPOLLIN) {//ÓÐ¿Í»§¶Ë·¢ËÍÊý¾Ý¹ýÀ´
+		else if (events[i].events & EPOLLIN){
 			int sock = events[i].data.fd;
 			if (sock < 0)
 				continue;
-			//doServer((void*)sock);
-			Task_t task(doServer, (void*)&sock);
+            int fd[2] = {_efd ,sock};
+
+            Task_t task(doServer, (void*)fd);
 			ThreadPool* tp = ThreadPool::getInstance();
 			tp->addTask(task);
-			memset(events, 0, sizeof(events));
-		}
-	}
+	    }
+    }
 }
 
 void* Epoll::clientConnect(void* epo) {
@@ -63,19 +48,38 @@ void* Epoll::clientConnect(void* epo) {
 	struct sockaddr_in peeraddr;
 	socklen_t peerlen = sizeof(peeraddr);
 	int conn = accept(ep->_lfd, (struct sockaddr*) & peeraddr, &peerlen);
-	struct epoll_event ev;
-	ev.data.fd = conn;
+    struct epoll_event ev;
+    int flag = fcntl(conn,F_GETFL);
+    flag |= O_NONBLOCK;
+    fcntl(conn,F_SETFL,flag);
+    ev.data.fd = conn;
 	ev.events = EPOLLIN | EPOLLET;
-	epoll_ctl(ep->_efd, EPOLL_CTL_ADD, conn, &ev);//½«ÐÂÁ´½ÓµÄfd¹Òµ½Ê÷ÉÏ
-	std::cout << "client connected\n";
+	epoll_ctl(ep->_efd, EPOLL_CTL_ADD, conn, &ev);//å°†æ–°é“¾æŽ¥çš„fdæŒ‚åˆ°æ ‘ä¸Š
+    return NULL;
 }
-void* Epoll::doServer(void* s) {
-	int sock = *(int*)s;
-	char buf[1024];
-	int re = read(sock, buf, sizeof(buf));
-	std::cout << buf << std::endl;
-	const char* p = "HTTP/1.1 200 OK\r\n\r\n<h1>hello world</h1>\r\n";
-	write(sock, p, strlen(p));
-	close(sock);
+void* Epoll::doServer(void* epo) {
+    int* sock = (int*)epo;
+    int epfd = *sock;
+    sock++;
+    int conn = *sock;
+    char buf[1024];
+	int ret = read(conn, buf, sizeof(buf));
+    if(ret == 0){
+        close(conn);
+        return NULL;
+    }
+    int fd = open("index.html",O_RDONLY);
+    const char* p = "HTTP/1.1 200 OK\r\nContent-Length: 2245\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n";
+    write(sock,p,strlen(p));
+    while(true){
+        int ret = read(fd,buf,sizeof(buf));
+        
+        if(ret == 0)
+            break;
+        write(sock,buf,ret);
+    }
+	LOG_DEBUG << "Response over";
+    //close(sock);
+    return NULL;
 }
 

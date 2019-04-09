@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +19,7 @@ class Epoll{
 	int _efd;
 	int _lfd;
 	struct epoll_event events[128];
-	int _maxEvents;
+    int _maxEvents;
 public:
 	Epoll():_maxEvents(128){}
 	~Epoll(){}

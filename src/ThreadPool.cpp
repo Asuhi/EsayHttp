@@ -1,11 +1,11 @@
-#include "ThreadPool.h"
+ï»¿#include "ThreadPool.h"
 #include <iostream>
 #include <pthread.h>
 
 ThreadPool* ThreadPool::_instance = NULL;
 
 void ThreadPool::routine(ThreadPool* tp) {
-	pthread_detach(pthread_self());//Ïß³Ì·ÖÀë
+	pthread_detach(pthread_self());//çº¿ç¨‹åˆ†ç¦»
 	while (true) {
 		tp->_mtx.lock();
 		while (tp->_task.empty()) {
